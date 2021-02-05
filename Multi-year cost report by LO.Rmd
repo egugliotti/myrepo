@@ -1,0 +1,122 @@
+---
+title: "Cost Report for OAR"
+output:
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    social: menu
+    theme: sandstone
+---
+
+```{r}
+library(kableExtra)
+library(reactable)
+library(formattable)
+library(flexdashboard)
+library(treemap)
+library(RColorBrewer)
+library(thematic)
+source('/Users/elizabethgugliotti/Desktop/EORES v1.6 Files (PROD-NOSIA-II)/Scripts/ImportFiles_CreateJoins.R')
+```
+
+```{r}
+system2cost<- Systems %>%
+  full_join(ObservingSystemCostInformation, by="system_id")%>%
+  dplyr::select(-country_names, -system_deployment_plans, -system_description, -system_cost_id, -palma_id) %>%
+  arrange(desc(osc_baseline_observing_system_category), desc(cost_type)) %>%
+  full_join(POHtoSystem[POHtoSystem$poh_affiliation_type=="OBSERVING SYSTEM OWNER",], by = "system_id") %>%
+  filter(!is.na(system_name)) %>%
+  filter(level_3_short_name == "NOAA"| system_acronym == "NERRS SWMP", osc_baseline_observing_system_category == "Critical") %>%
+  dplyr::mutate(system_name = paste0(system_name," (",system_acronym,")")) %>%
+  filter(level_4_short_name=="NMFS",
+         year %in% c(2016, 2017, 2018, 2019)) %>%
+  dplyr::mutate(level_4_short_name=replace(level_4_short_name, which(system_acronym == "NERRS SWMP"), "NOS")) %>%
+  dplyr::select(system_name, year, cost_type, cost_category, cost) %>%
+  filter(system_name != "Advanced Composition Explorer (ACE)") %>%
+    mutate(year = paste0("FY", year)) %>%
+  mutate(unique_sys = paste(system_name, year, cost_type, cost)) %>%
+  distinct(unique_sys, .keep_all = TRUE) %>%
+  select(-unique_sys) %>%
+  mutate(cost_type = replace(cost_type, which (cost_type == ""), "ORF"))
+# system2cost<-system2cost[-c(19),] (FOR NMFS)
+
+system2cost_fy19<-system2cost %>%
+  filter(year=="FY2019",
+         cost_category == "Annual Operating Cost")
+  
+system2cost_wide<- system2cost %>% 
+  filter(system_name %in% system2cost_fy19$system_name) %>%
+  pivot_wider(names_from = year, values_from = cost) %>%
+  as.data.frame() %>%
+  arrange(system_name, cost_category) %>%
+  mutate(FY2016 = ifelse(FY2016 == "NULL", NA, FY2016),
+         FY2017 = ifelse(FY2017 == "NULL", NA, FY2017),
+         FY2018 = ifelse(FY2018 == "NULL", NA, FY2018),
+         FY2019 = ifelse(FY2019 == "NULL", NA, FY2019))
+# have to use DT for data tables in flexdashboard
+```
+Overview
+=======================================================================
+  
+Row
+-----------------------------------------------------------------------
+### FY19 Total Cost {.value-box}
+```{r}
+fy19_cost_filt<- system2cost %>% 
+  filter(year=="FY2019",
+         cost_category == "Annual Operating Cost")
+fy19_cost_filt<- as.numeric(round(sum(fy19_cost_filt$cost),2))
+fy19_cost<- paste(comma(fy19_cost_filt), "$K")
+valueBox(fy19_cost, color = "success")
+```
+
+### vs FY18 {.value-box}
+```{r}
+fy18_cost_filt<- system2cost %>% 
+  filter(year=="FY2018",
+         cost_category == "Annual Operating Cost")
+fy18_cost_filt<- as.numeric(round(sum(fy18_cost_filt$cost),2))
+fy18_cost_pcent<-((fy19_cost_filt/fy18_cost_filt)-1)*100
+fy18_cost<- paste(comma(fy18_cost_pcent), "%")
+color<-"rgb(128,222,126)"
+if(fy18_cost_pcent < 0) color <- "rgb(237,130,130)"
+
+valueBox(fy18_cost, color = color)
+```
+
+Row
+-----------------------------------------------------------------------
+### FY19 Cost by System
+```{r}
+thematic_on()
+fy19_cost_filt2<- system2cost %>% 
+  filter(year=="FY2019",
+         cost_category == "Annual Operating Cost")
+p<-treemap(fy19_cost_filt2,
+        index = "system_name",
+        vSize = "cost",
+        type = "index",
+        title = " ")
+```
+
+Table
+===================================== 
+
+### Cost by System and Category in $K
+```{r}
+system2cost_wide<- system2cost_wide %>%
+  select(system_name, cost_type, cost_category, FY2016, FY2017, FY2018, FY2019)
+reactable(system2cost_wide, resizable = TRUE, groupBy ="system_name", 
+          columns = list(
+            system_name = colDef(name = "System Name", minWidth = 300),
+            cost_type = colDef(name = "Cost Type"),
+            cost_category = colDef(name = "Cost Category")),
+rowStyle = function(index) {
+  if(!is.na(system2cost_wide[index, "FY2019"])) list(background = "rgba(0, 0, 0, 0.05)")
+},
+          theme = reactableTheme(
+            style = list(fontFamily = "Work Sans, sans-serif")),
+          pageSizeOptions = 25)
+```
+
+
+

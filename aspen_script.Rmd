@@ -1,0 +1,126 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r, echo = FALSE, warning = FALSE, message=FALSE}
+source('/Users/elizabethgugliotti/Desktop/EORES v1.6 Files (PROD-NOSIA-II)/Scripts/ImportFiles_CreateJoins.R')
+library(utils)
+library(tidyverse)
+library(gt)
+```
+
+
+## ASPEN
+Read in ASPEN Table and filter to the two columns you need with the ASPEN variable and ASPEN variable topic
+```{r, warning = FALSE, message=FALSE}
+aspen<-read.csv("/Users/elizabethgugliotti/Desktop/EORES v1.6 Files (PROD-NOSIA-II)/ASPEN/GCMD vs Application.csv", header = TRUE)
+aspen<- aspen %>%
+  select(GCMD.Variable, GCMD.Topic) %>%
+  dplyr::rename(gcmd_variable = GCMD.Variable,
+         gcmd_topic = GCMD.Topic)
+aspen
+```
+
+Get GCMDs
+```{r, warning = FALSE, message=FALSE}
+GCMDs<-GCMDMaster %>%
+   dplyr::rename(gcmd_variable = l1_variable,
+          gcmd_term = term,
+          gcmd_topic = topic) %>%
+  select(gcmd_topic, gcmd_term, gcmd_variable)
+          
+#### Find GCMD matches to ASPEN variables ####
+aspen_gcmd_match<- aspen %>%
+  filter(gcmd_variable %in% GCMDs$gcmd_variable)
+aspen_gcmd_match
+
+#### Find where there aren't GCMD matches to ASPEN variables ####
+#You will have to manually search for things that could possibly match. I would View(Requirements) or View(EOS) to look for requirements and/or environmental parameters that have names similar to the ASPEN variables without exact matches
+aspen_gcmd_NOmatch<- aspen %>%
+  filter(!gcmd_variable %in% GCMDs$gcmd_variable)
+aspen_gcmd_NOmatch
+```
+
+
+After finding the exact matches and then manually searching for other potentially matches to the ASPEN variables, I put those in a .csv file to import into R. I ended up adding a few more that looked like a match later as I was further along in the process. The matches also have a "match fit" according to if it was an exact match (1), a close match (2), or a bit of a stretch (3). 
+```{r, warning = FALSE, message=FALSE}
+all_aspen_gcmd<- read.csv("/Users/elizabethgugliotti/Desktop/EORES v1.6 Files (PROD-NOSIA-II)/ASPEN/aspen_gcmd_matches_all.csv", header = TRUE)
+
+all_aspen_gcmd<- all_aspen_gcmd %>%
+  filter(!is.na(gcmd_variable)) %>%
+  add_row(aspen_gcmd_topic = "Atmosphere", aspen_gcmd_variable = "Relative Humidity", gcmd_variable = "Dew Point Temperature: Profiles", gcmd_term = "Atmospheric Water Vapor", gcmd_topic = "Atmosphere", match_fit = 3) %>%
+  add_row(aspen_gcmd_topic = "Atmosphere", aspen_gcmd_variable = "Relative Humidity", gcmd_variable = "Dew Point Temperature: Surface", gcmd_term = "Atmospheric Water Vapor", gcmd_topic = "Atmosphere", match_fit = 3)%>%
+  add_row(aspen_gcmd_topic = "Atmosphere", aspen_gcmd_variable = "Relative Humidity", gcmd_variable = "Dew Point Temperature: Flight Level", gcmd_term = "Atmospheric Water Vapor", gcmd_topic = "Atmosphere", match_fit = 3)%>%
+  add_row(aspen_gcmd_topic = "Atmosphere", aspen_gcmd_variable = "Atmospheric Temperature", gcmd_variable = "Air Temperature: Profiles", gcmd_term = "Atmospheric Temperature", gcmd_topic = "Atmosphere", match_fit = 3)
+```
+
+
+Now it's time to match these GCMD variables to the environmental parameters of some sensors!
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+ASPEN_EOS <- EOS %>%
+  right_join(all_aspen_gcmd, by = "gcmd_variable") %>%
+  mutate(sensor_gcmd = paste0(sensing_element_name, " ",aspen_gcmd_variable)) %>%
+  distinct(sensor_gcmd, .keep_all = TRUE) %>%
+  select(-system_id, -system_intended_use, -platform_id, -sensing_element_id,  -sensing_capabilities_remarks, -environmental_parameter_id, -actual_or_derived, -gcmd_variable_l2, -geographic_coverage, -horizontal_resolution, -horizontal_resolution, -horizontal_resolution_units, -maximum_measurement, -minimum_measurement, -measurement_unit, -measurement_accuracy, -measurement_accuracy_units, -reporting_frequency, -reporting_frequency_units, -reporting_interval, -reporting_interval_units, -sampling_interval, -sampling_interval_units, -vertical_resolution, -vertical_resolution_units, -rating, -sensor_gcmd, -gcmd_term.y, -gcmd_topic.y) %>%
+  filter(grepl("Satellite", system_type ),
+         system_life_cycle_phase == c("Operational","Development"),
+         platform_life_cycle_phase ==c("Operational","Development"),
+         sensing_element_life_cycle_phase == c("Operational","Development"))
+
+library(data.table)
+ASPEN_sensor_gcmd<-ASPEN_EOS %>%
+  select(sensing_element_name, sensing_element_acronym, sensing_element_type, gcmd_variable, aspen_gcmd_variable) %>%
+  mutate(sensor_gcmd = paste0(sensing_element_name, " ",aspen_gcmd_variable)) %>%
+  distinct(sensor_gcmd, .keep_all = TRUE) %>%
+  select(-sensor_gcmd) %>%
+  mutate(sensing_element_name = as.factor(sensing_element_name)) %>%
+  as.data.table()
+```
+
+Long version of data
+```{r, echo = FALSE}
+# Create Table like Lou had them
+ASPEN_sensor_gcmd[, id := 1:.N, by = sensing_element_name]
+ASPEN_sensor_gcmd
+```
+
+
+Data like Lou had them
+```{r, echo = FALSE}
+ASPEN_sensor_gcmd_group <- ASPEN_sensor_gcmd %>%
+  select(sensing_element_name, id, aspen_gcmd_variable) %>%
+  mutate(id = as.factor(paste0("gcmd_variable_",id))) %>%
+  spread(key = id, value = aspen_gcmd_variable)
+ASPEN_sensor_gcmd_group
+```
+
+Pretty Table
+```{r, echo = FALSE}
+ASPEN_sensor_gcmd %>%
+  select(sensing_element_name, id, aspen_gcmd_variable) %>%
+  mutate(id = as.factor(paste0("GCMD Variable ",id))) %>%
+  gt(rowname_col = "id", groupname_col = "sensing_element_name") %>%
+  tab_header(title = "ASPEN Variables By Sensor") %>%
+  cols_label(sensing_element_name = "Sensor Name", aspen_gcmd_variable = "ASPEN Variable") %>%
+  tab_options(row_group.background.color = "lightgray")
+```
+
+Nested Table
+```{r, echo = FALSE}
+# Create usable nested data
+n_ASPEN <- ASPEN_sensor_gcmd_group %>%
+  group_by(sensing_element_name) %>%
+  nest()
+n_ASPEN
+```
+
+```{r}
+source('/Users/elizabethgugliotti/Desktop/EORES v1.6 Files (PROD-NOSIA-II)/Scripts/aspen_search_list.R')
+
+to_search<- c("modis","goes")
+list.search(to_search, ASPEN_sensor_gcmd, ASPEN_sensor_gcmd$sensing_element_name)
+```
+

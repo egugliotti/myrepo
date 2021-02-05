@@ -1,0 +1,139 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+
+```{r}
+library(plyr)
+library(readr)
+library(dplyr)
+library(tidyverse)
+library(sjmisc)
+library(stringr)
+
+myfiles = list.files(path="/Users/elizabethgugliotti/Desktop/EORES v1.6 Files (PROD-NOSIA-II)/NOSIA-2-1", pattern="*.csv", full.names=TRUE)
+
+POHtoReq2_1<-read.csv(myfiles[13])
+POHtoSystem2_1<-read.csv(myfiles[14])
+Person2_1<-read.csv(myfiles[23])
+Requirements2_1<-read.csv(myfiles[27])
+Systems2_1<-read.csv(myfiles[29])
+IsContributingMember2_1<-read.csv(myfiles[4])
+IsContributingMember2_1$surveyed_product_elicitation_id<-as.integer(IsContributingMember2_1$surveyed_product_elicitation_id)
+IsDirectContributer2_1<-read.csv(myfiles[5])
+ProductToTree2_1<-read.csv(myfiles[15]) 
+DataSource2_1<-read.csv(myfiles[18])
+Products2_1<-read.csv(myfiles[26])
+VT2_1<-read.csv(myfiles[28])
+VTraw2_1<-read.csv(myfiles[36])
+POHraw2_1<-read.csv(myfiles[31])
+```
+
+
+```{r}
+Pds_data_source1<- Products2_1 %>%
+  full_join(IsDirectContributer2_1, by = "surveyed_product_elicitation_id") %>%
+  full_join(DataSource2_1, by =c("level_1_data_source_id"="data_source_id")) %>% 
+  select(-value_tree_name.x, -value_tree_name.y) %>%
+  rename(data_source_id=level_1_data_source_id) %>%
+  select(-level_2_data_source_id) %>%
+  mutate(data_source_id_level = 1) %>%
+  select(1:14, 31, everything())
+
+Pds_data_source_2<- Products2_1 %>%
+  full_join(IsContributingMember2_1, by = "surveyed_product_elicitation_id") %>%
+  mutate(level_2_data_source_id = as.integer(level_2_data_source_id)) %>%
+  full_join(DataSource2_1, by =c("level_2_data_source_id"="data_source_id")) %>%
+  rename(data_source_id=level_2_data_source_id) %>%
+  select(-value_tree_name.x, -value_tree_name.y, -level_1_data_source_id) %>%
+  mutate(data_source_id_level = 2,
+         score_value = as.integer(score_value),
+         overall_satisfaction_score = as.integer(overall_satisfaction_score)) %>%
+  select(1:14, 31, everything())
+
+Pds_source_group<- Pds_data_source1 %>%
+  bind_rows(Pds_data_source_2) %>%
+  select(-elicitation_date, -elicitation_comments, -surveyed_product_description, status_quo_score, -status_quo_score_note, -low_side_score, -high_side_score, -score_type, -score_value, -score_comment, -overall_satisfaction_score, -overall_satisfaction_score_comment, -value_tree_name, -data_source_description, cost, -option, -dependency_type, -cost_units, -cost_source, -cost_comments)
+```
+
+
+For FWX AND How to connect VT to Pds_source_group to EOS2Palma
+```{r}
+VT_FWX<- VT2_1 %>%
+  filter(grepl("WRN_FWX", value_tree_level_3)) %>%
+  inner_join(ProductToTree2_1, by = "value_tree_node_id") %>%
+  inner_join(Pds_source_group, by = "surveyed_product_elicitation_id") 
+
+
+%>%
+  select(-node_description, -node_weight, -surveyed_product_elicitation_id, -value_tree_name, -surveyed_product_weight, -surveyed_product_data_source_id, -data_source_id, -surveyed_product_value_tree_node_id, -status_quo_score)
+
+```
+
+
+
+NWS POH update check
+```{r}
+POHtoReq2_1$requirement_id<-as.numeric(POHtoReq$requirement_id)
+Req_NWS2_1<-Requirements2_1 %>%
+  mutate(requirement_id = as.numeric(requirement_id)) %>%
+  select(1:3) %>%
+  inner_join(POHtoReq2_1, by = "requirement_id")%>%
+  filter(level_4_short_name == "NWS") %>%
+  select(-level_1_name, -requirement_type, -eor_poh_id, -level_1_short_name, -level_2_name, -level_2_short_name, -level_3_name, -level_3_short_name)  %>%
+  filter(level_5_name != "NONE")
+# 76 requirements impacted by change is upper hierarchy of space weather prediction center
+
+Sys_NWS2_1<- Systems2_1 %>%
+  inner_join(POHtoSystem2_1[POHtoSystem2_1$level_4_short_name=="NWS",], by = "system_id") %>%
+  select(-level_1_name, -level_1_short_name, -level_2_name, -level_2_short_name, -level_3_name, -level_3_short_name, -system_description, -system_intended_use, -system_life_cycle_phase, -system_deployment_plans, -osc_baseline_observing_system_category, -country_names, -palma_id, -observing_system_poh_id) %>%
+  filter(level_5_name != "NONE")
+# 3 systems with upper hierarchy changes 2 NCEP, and 1 PacificRegion
+
+Prod_NWS2_1<- Products2_1 %>%
+  inner_join(POHraw2_1[POHraw2_1$level_4_short_name=="NWS",], by = "poh_id") %>%
+  select(-level_1_name, -level_1_short_name, -level_2_name, -level_2_short_name, -level_3_name, -level_3_short_name, -value_tree_name, -surveyed_product_elicitation_id, -surveyed_product_description, -elicitation_comments, -elicitation_date, -status_quo_score, -status_quo_score_note, -low_side_score, -high_side_score) %>%
+  filter(level_5_name != "NONE")
+# 197 products NCEP, 30 Pacific Region, 74 Central Region, 15 western region, 27 Southern, 58 Eastern Region, 18 CWSUs
+
+Person_NWS2_1<- Person2_1 %>%
+  inner_join(POHraw2_1[POHraw2_1$level_4_short_name=="NWS",], by = "poh_id") %>%
+  select(-level_1_name, -level_1_short_name, -level_2_name, -level_2_short_name, -level_3_name, -level_3_short_name, -primary_phone_number, -primary_phone_extension, -date_active, -date_inactive, -preferred_name, -title) %>%
+  filter(level_5_name != "NONE")
+
+#63 NCEP, 2 CWSU, 6 Pacific Region, 12 Eastern Region, 32 Central Region, 9 Southern Region, 2 Western Region
+
+Req_TPIO2_1<-Requirements2_1 %>%
+  mutate(requirement_id = as.numeric(requirement_id)) %>%
+  select(1:3) %>%
+  inner_join(POHtoReq2_1, by = "requirement_id")%>%
+  filter(level_6_short_name == "TPIO") %>%
+  select(-level_1_name, -level_1_short_name, -level_2_name, -level_2_short_name, -level_3_name, -level_3_short_name)  
+
+
+Sys_TPIO2_1<- Systems2_1 %>%
+  inner_join(POHtoSystem2_1[POHtoSystem2_1$level_6_short_name=="TPIO",], by = "system_id") %>%
+  select(-level_1_name, -level_1_short_name, -level_2_name, -level_2_short_name, -level_3_name, -level_3_short_name)
+
+
+Prod_TPIO2_1<- Products2_1 %>%
+  inner_join(POHraw2_1[POHraw2_1$level_6_short_name=="TPIO",], by = "poh_id") %>%
+  select(-level_1_name, -level_1_short_name, -level_2_name, -level_2_short_name, -level_3_name, -level_3_short_name, -value_tree_name, -surveyed_product_elicitation_id, -surveyed_product_description, -elicitation_comments, -elicitation_date, -status_quo_score, -status_quo_score_note, -low_side_score, -high_side_score)
+
+Person_TPIO2_1<- Person2_1 %>%
+  inner_join(POHraw2_1[POHraw2_1$level_6_short_name=="TPIO",], by = "poh_id") %>%
+  select(-level_1_name, -level_1_short_name, -level_2_name, -level_2_short_name, -level_3_name, -level_3_short_name, -primary_phone_number, -primary_phone_extension, -date_active, -date_inactive)
+# 4 plus a test under TPIO, a Matt Austin might need to be removed
+```
+
+
+```{r}
+Sys_NOAA2_1<- Systems2_1 %>%
+  inner_join(POHtoSystem2_1[POHtoSystem2_1$level_3_short_name=="NOAA",], by = "system_id") %>%
+  filter(grepl("Satellite", system_type)) %>%
+  filter(system_life_cycle_phase == "Operational") %>%
+  filter(poh_affiliation_type=="OBSERVING SYSTEM OWNER")
+
+```

@@ -1,0 +1,365 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r}
+library(dplyr)
+library(tidyr)
+
+NOSIA_TRE<-read.csv("/Users/elizabethgugliotti/Desktop/EORES v1.6 Files (PROD-NOSIA-II)/Input/NOSIAII_TRE.csv", header = TRUE)
+```
+
+```{r}
+#gViregexpr
+NOSIA_TRE$count_children<-lengths(regexpr(" ", NOSIA_TRE$Children))
+NOSIA_TRE_Node <- NOSIA_TRE %>%
+  select(-Children, -Rule, -Color, -Style, -Ghost) %>%
+  mutate(Node = as.numeric(Node))
+
+NOSIA_TRE_long <- NOSIA_TRE %>%
+  select(-Rule, -Color, -Style, -Ghost) %>%
+  mutate(Children = strsplit(Children, " ")) %>%
+  unnest(Children)  %>%
+  mutate(Children = as.numeric(Children))
+
+
+NOSIA_TRE_join <- NOSIA_TRE_long %>%
+  full_join(NOSIA_TRE_Node, by = c("Children"="Node")) %>%
+  select(-count_children.y) %>%
+  rename(Definition_parent = Definition.x,
+         Units_parent = Units.x,
+         count_children = count_children.x,
+         Rationale_parent = Rationale.x,
+         Definition_child = Definition.y,
+         Units_child = Units.y,
+         Rationale_child = Rationale.y) %>%
+  mutate(Label = paste0(Units_child,"->", Units_parent))
+
+# NOSIA_TRE_single_nodes<- NOSIA_TRE_Node %>%
+#  filter(!Node %in% NOSIA_TRE_join$Node)
+
+NOSIA_Edge <- NOSIA_TRE_join %>%
+  rename(Target = Definition_parent,
+         Source = Definition_child) %>%
+  select(Source, Target, Label)  %>% 
+  write.csv("/Users/elizabethgugliotti/Desktop/EORES v1.6 Files (PROD-NOSIA-II)/Output/NOSIA_Edge_File.csv", row.names = FALSE)
+
+NOSIA_Node <- NOSIA_TRE %>%
+  filter(Units != "") %>%
+  rename(Id = Definition,
+         Label = Units) %>%
+  select(Id, Label) %>% 
+  write.csv("/Users/elizabethgugliotti/Desktop/EORES v1.6 Files (PROD-NOSIA-II)/Output/NOSIA_Node_File.csv", row.names = FALSE)
+```
+
+```{r}
+#kps_redo_NOSIA1<-NOSIA_TRE_join %>%
+#  filter(grepl("kpsCmb->", Label))
+#kps_redo_NOSIA2<- NOSIA_TRE_join %>%
+#  filter(grepl("kpshGrp->", Label))
+#kps_redo_NOSIA<- NOSIA_TRE_join %>%
+#  filter(grepl("kpsGof1->", Label)) %>%
+#  bind_rows(kps_redo_NOSIA1) %>%
+#  bind_rows(kps_redo_NOSIA2)
+
+
+#kps_NOSIA <-NOSIA_TRE_join %>%
+#   full_join(kps_redo_NOSIA, by = c("Node"="Children")) %>%
+#    mutate(Definition_parent.x = ifelse(!is.na(Definition_parent.y), Definition_parent.y, Definition_parent.x),
+#         Units_parent.x = ifelse(!is.na(Definition_parent.y), Units_parent.y, Units_parent.x),
+#         Node =ifelse(!is.na(Definition_parent.y), Node.y, Node),
+#         Rationale_parent.x = ifelse(!is.na(Definition_parent.y), Rationale_parent.y, Rationale_parent.x),
+#         count_children = ifelse(!is.na(Definition_parent.y), count_children.x*count_children.y, count_children.x),
+#         Label = paste0(Units_child.x,"->", Units_parent.x)) %>%
+#    filter(!grepl("kpsGof1->", Label)) %>%
+#    filter(!grepl("kpsCmb->", Label)) %>%
+#    filter(!grepl("kpshGrp->", Label)) %>%
+#    select(-Label.x, -Label.y, -count_children.x, -count_children.y, -Definition_parent.y, -Units_parent.y, -Rationale_parent.y, -Node.y, -Definition_child.y, -Rationale_child.y, -Units_child.y) %>%
+#      dplyr::rename(Definition_parent = Definition_parent.x,
+#         Units_parent = Units_parent.x,
+#         Rationale_parent = Rationale_parent.x,
+#         Definition_child = Definition_child.x,
+#         Units_child = Units_child.x,
+#         Rationale_child = Rationale_child.x)
+
+kps_redo_NOSIA <- NOSIA_TRE_join %>%
+  filter(grepl("kps->", Label))
+srcscore_redo_NOSIA<- NOSIA_TRE_join %>%
+  filter(grepl("->SrcScore", Label))
+ObsCap_redo_NOSIA <- NOSIA_TRE_join %>%
+  filter(grepl("ObsCap->", Label))
+PrdCap_redo_NOSIA <- NOSIA_TRE_join %>%
+  filter(grepl("PrdCap->", Label))
+
+
+kps_NOSIA <-NOSIA_TRE_join %>%
+  full_join(kps_redo_NOSIA, by = c("Node"="Children"))%>%
+  mutate(Definition_parent.x = ifelse(!is.na(Definition_parent.y), Definition_parent.y, Definition_parent.x),
+         Units_parent.x = ifelse(!is.na(Definition_parent.y), Units_parent.y, Units_parent.x),
+         Node =ifelse(!is.na(Definition_parent.y), Node.y, Node),
+         Rationale_parent.x = ifelse(!is.na(Definition_parent.y), Rationale_parent.y, Rationale_parent.x),
+         count_children = ifelse(!is.na(Definition_parent.y), count_children.x*count_children.y, count_children.x),
+         Label = paste0(Units_child.x,"->", Units_parent.x)) %>%
+  filter(!grepl("kps->", Label)) %>%
+  select(-Label.x, -Label.y, -count_children.x, -count_children.y, -Definition_parent.y, -Units_parent.y, -Rationale_parent.y, -Node.y, -Definition_child.y, -Rationale_child.y, -Units_child.y) %>%
+  dplyr::rename(Definition_parent = Definition_parent.x,
+         Units_parent = Units_parent.x,
+         Rationale_parent = Rationale_parent.x,
+         Definition_child = Definition_child.x,
+         Units_child = Units_child.x,
+         Rationale_child = Rationale_child.x)
+
+
+SrcScore_NOSIA <-kps_NOSIA %>%
+  full_join(srcscore_redo_NOSIA, by = c("Children"="Node"))%>%
+  mutate(Definition_child.x = ifelse(!is.na(Definition_parent.y), Definition_child.y, Definition_child.x),
+         Units_child.x = ifelse(!is.na(Definition_parent.y), Units_child.y, Units_child.x),
+         Children =ifelse(!is.na(Definition_parent.y), Children.y, Children),
+         Rationale_parent.x = ifelse(!is.na(Definition_parent.y), Rationale_child.y, Rationale_child.x),
+         count_children = ifelse(!is.na(Definition_parent.y), count_children.x*count_children.y, count_children.x),
+         Label = paste0(Units_child.x,"->", Units_parent.x)) %>%
+  filter(!grepl("->SrcScore", Label)) %>%
+  select(-Label.x, -Label.y, -count_children.x, -count_children.y, -Definition_parent.y, -Units_parent.y, -Rationale_parent.y, -Children.y,-Definition_child.y, -Rationale_child.y, -Units_child.y) %>%
+  dplyr::rename(Definition_parent = Definition_parent.x,
+         Units_parent = Units_parent.x,
+         Rationale_parent = Rationale_parent.x,
+         Definition_child = Definition_child.x,
+         Units_child = Units_child.x,
+         Rationale_child = Rationale_child.x)
+
+userscore_redo_NOSIA<-SrcScore_NOSIA %>%
+  filter(grepl("->UserScore", Label))
+
+UserScore_NOSIA <-SrcScore_NOSIA %>%
+  full_join(userscore_redo_NOSIA, by = c("Children"="Node"))%>%
+  mutate(Definition_child.x = ifelse(!is.na(Definition_parent.y), Definition_child.y, Definition_child.x),
+         Units_child.x = ifelse(!is.na(Definition_parent.y), Units_child.y, Units_child.x),
+         Children =ifelse(!is.na(Definition_parent.y), Children.y, Children),
+         Rationale_child.x = ifelse(!is.na(Definition_parent.y), Rationale_child.y, Rationale_child.x),
+         count_children = ifelse(!is.na(Definition_parent.y), count_children.x*count_children.y, count_children.x),
+         Label = paste0(Units_child.x,"->", Units_parent.x)) %>%
+  filter(!grepl("->UserScore", Label)) %>%
+  select(-Label.x, -Label.y, -count_children.x, -count_children.y, -Definition_parent.y, -Units_parent.y, -Rationale_parent.y, -Children.y, -Definition_child.y, -Rationale_child.y, -Units_child.y) %>%
+  dplyr::rename(Definition_parent = Definition_parent.x,
+         Units_parent = Units_parent.x,
+         Rationale_parent = Rationale_parent.x,
+         Definition_child = Definition_child.x,
+         Units_child = Units_child.x,
+         Rationale_child = Rationale_child.x)
+
+obs_redo_NOSIA<- UserScore_NOSIA %>%
+  full_join(ObsCap_redo_NOSIA, by = c("Node"="Children")) %>%
+  mutate(Definition_parent.x = ifelse(!is.na(Definition_parent.y), Definition_parent.y, Definition_parent.x),
+         Units_parent.x = ifelse(!is.na(Definition_parent.y), Units_parent.y, Units_parent.x),
+         Node =ifelse(!is.na(Definition_parent.y), Node.y, Node),
+         Rationale_parent.x = ifelse(!is.na(Definition_parent.y), Rationale_parent.y, Rationale_parent.x),
+         count_children = ifelse(!is.na(Definition_parent.y), count_children.x*count_children.y, count_children.x),
+         Label = paste0(Units_child.x,"->", Units_parent.x)) %>%
+  filter(!grepl("ObsCap->", Label)) %>%
+  select(-Label.x, -Label.y, -count_children.x, -count_children.y, -Definition_parent.y, -Units_parent.y, -Rationale_parent.y, -Node.y, -Definition_child.y, -Rationale_child.y, -Units_child.y) %>%
+  dplyr::rename(Definition_parent = Definition_parent.x,
+         Units_parent = Units_parent.x,
+         Rationale_parent = Rationale_parent.x,
+         Definition_child = Definition_child.x,
+         Units_child = Units_child.x,
+         Rationale_child = Rationale_child.x)
+
+
+prd_redo_NOSIA<- obs_redo_NOSIA %>%
+  full_join(PrdCap_redo_NOSIA, by = c("Node"="Children")) %>%
+  mutate(Definition_parent.x = ifelse(!is.na(Definition_parent.y), Definition_parent.y, Definition_parent.x),
+         Units_parent.x = ifelse(!is.na(Definition_parent.y), Units_parent.y, Units_parent.x),
+         Node =ifelse(!is.na(Definition_parent.y), Node.y, Node),
+         Rationale_parent.x = ifelse(!is.na(Definition_parent.y), Rationale_parent.y, Rationale_parent.x),
+         count_children = ifelse(!is.na(Definition_parent.y), count_children.x*count_children.y, count_children.x),
+         Label = paste0(Units_child.x,"->", Units_parent.x)) %>%
+  filter(!grepl("PrdCap->", Label)) %>%
+  select(-Label.x, -Label.y, -count_children.x, -count_children.y, -Definition_parent.y, -Units_parent.y, -Rationale_parent.y, -Node.y, -Definition_child.y, -Rationale_child.y, -Units_child.y) %>%
+  dplyr::rename(Definition_parent = Definition_parent.x,
+         Units_parent = Units_parent.x,
+         Rationale_parent = Rationale_parent.x,
+         Definition_child = Definition_child.x,
+         Units_child = Units_child.x,
+         Rationale_child = Rationale_child.x)
+```
+
+```{r}
+
+# There are Src Scores that have the same name as SvPrds so for those I need to change the rationale of the SrcScore to something else so I don't get a loop in the app
+NOSIA_Edge_File <- prd_redo_NOSIA %>%
+  mutate(Units_parent = replace(Units_parent, Units_parent=="NOAA", "NOSIA-II"),
+         Definition_parent = replace(Definition_parent, Units_parent=="NOSIA-II", "NOSIA-II")) %>%
+  mutate(Units_parent = replace(Units_parent, grepl("Org", Units_parent), " "),
+         Units_child = replace(Units_child, grepl("Org", Units_child), " ")) %>%
+  mutate(Units_parent = replace(Units_parent, Units_parent=="Sites", "Site"),
+         Units_child = replace(Units_child, Units_child=="Sites", "Site"),
+         Label = paste0(Units_child,"->", Units_parent)) %>%
+  filter(Units_child != "FundPgm",
+         Units_parent != "FundPgm",
+         Units_child != "NOAA") %>%
+  select(Rationale_child, Rationale_parent, Label) %>%
+  filter(Rationale_child != "") %>%
+  dplyr::rename(Target = Rationale_parent,
+         Source = Rationale_child) 
+Src2Prd_Name <- NOSIA_Edge_File %>% 
+  filter(Source ==Target)
+
+# Have to choose Rationale because of System Sensor names
+#All Org Levels must be turned to 'Org' in Node File
+NOSIA_Node_File <- prd_redo_NOSIA %>%
+  filter(Units_child != "FundPgm",
+         Units_parent != "FundPgm",
+         Units_child != "NOAA") %>%
+  mutate(Units_parent = replace(Units_parent, Units_parent=="NOAA", "NOSIA-II"),
+         Definition_parent = replace(Definition_parent, Units_parent=="NOSIA-II", "NOSIA-II")) %>%
+  mutate(Rationale_parent = ifelse(Units_parent == "SrcScore" & Rationale_parent %in% Src2Prd_Name$Target, paste0( Rationale_parent,"_SrcScore"), Rationale_parent)) %>%
+  mutate(Rationale_child = ifelse(Units_child =="SrcScore" & Rationale_child %in% Src2Prd_Name$Target, paste0( Rationale_child,"_SrcScore"), Rationale_child))%>%
+  mutate(def_units = paste0(Rationale_parent, " ", Units_parent)) %>%
+  distinct(def_units, .keep_all = TRUE) %>%
+  select(-def_units) %>%
+  select(Rationale_parent, Units_parent) %>%
+  mutate(Units_parent = replace(Units_parent, Units_parent=="Sites", "Site")) %>%
+  mutate(Units_parent = replace(Units_parent, grepl("Org", Units_parent), "Org")) %>%
+  dplyr::rename(Id = Rationale_parent,
+         Label = Units_parent) %>% 
+  write.csv("/Users/elizabethgugliotti/Desktop/Sankey/NOSIA_Node_File.csv", row.names = FALSE)
+
+
+#All Org Levels must be turned to blank in Edge File (this distinguishes when an org is a site and when it is a level in hierarchy)
+NOSIA_Edge_File <- prd_redo_NOSIA %>%
+  mutate(Units_parent = replace(Units_parent, Units_parent=="NOAA", "NOSIA-II"),
+         Definition_parent = replace(Definition_parent, Units_parent=="NOSIA-II", "NOSIA-II")) %>%
+  mutate(Units_parent = replace(Units_parent, grepl("Org", Units_parent), " "),
+         Units_child = replace(Units_child, grepl("Org", Units_child), " ")) %>%
+  mutate(Units_parent = replace(Units_parent, Units_parent=="Sites", "Site"),
+         Units_child = replace(Units_child, Units_child=="Sites", "Site"),
+         Label = paste0(Units_child,"->", Units_parent)) %>%
+  filter(Units_child != "FundPgm",
+         Units_parent != "FundPgm",
+         Units_child != "NOAA") %>%
+  mutate(Rationale_parent = ifelse(Units_parent == "SrcScore" & Rationale_parent %in% Src2Prd_Name$Target, paste0( Rationale_parent,"_SrcScore"), Rationale_parent)) %>%
+  mutate(Rationale_child = ifelse(Units_child =="SrcScore" & Rationale_child %in% Src2Prd_Name$Target, paste0( Rationale_child,"_SrcScore"), Rationale_child))%>%
+  select(Rationale_child, Rationale_parent, Label) %>%
+  filter(Rationale_child != "") %>%
+  dplyr::rename(Target = Rationale_parent,
+         Source = Rationale_child) %>% 
+  write.csv("/Users/elizabethgugliotti/Desktop/Sankey//NOSIA_Edge_File.csv", row.names = FALSE)
+
+```
+
+## EOA
+```{r}
+EOA_TRE<-read.csv("/Users/elizabethgugliotti/Desktop/EORES v1.6 Files (PROD-NOSIA-II)/Input/EOA_TRE.csv", header = TRUE)
+```
+
+```{r}
+EOA_TRE$count_children<-lengths(gregexpr(" ", EOA_TRE$Children))
+EOA_TRE_Node <- EOA_TRE %>%
+  select(-Children, -Rule, -Color, -Style, -Ghost) %>%
+  mutate(Node = as.numeric(Node))
+
+EOA_TRE_long <- EOA_TRE %>%
+  select(-Rule, -Color, -Style, -Ghost) %>%
+  mutate(Children = strsplit(Children, " ")) %>%
+  unnest(Children)  %>%
+  mutate(Children = as.numeric(Children))
+
+
+EOA_TRE_join <- EOA_TRE_long %>%
+  full_join(EOA_TRE_Node, by = c("Children"="Node")) %>%
+  select(-count_children.y) %>%
+  rename(Definition_parent = Definition.x,
+         Units_parent = Units.x,
+         count_children = count_children.x,
+         Rationale_parent = Rationale.x,
+         Definition_child = Definition.y,
+         Units_child = Units.y,
+         Rationale_child = Rationale.y) %>%
+  mutate(Label = paste0(Units_child,"->", Units_parent))
+```
+
+```{r}
+kps_redo<- EOA_TRE_join %>%
+  filter(grepl("->kps", Label))
+ObsCap_redo <- EOA_TRE_join %>%
+  filter(grepl("ObsCap->", Label))
+PrdCap_redo <- EOA_TRE_join %>%
+  filter(grepl("PrdCap->", Label))
+
+kps_redo_EOA <-EOA_TRE_join %>%
+  mutate(Units_child = replace (Units_child, which(Children %in% kps_redo$Node), kps_redo$Units_child),
+         Definition_child =replace (Definition_child, which(Children %in% kps_redo$Node), kps_redo$Definition_child),
+         count_children=replace (count_children, which(Children %in% kps_redo$Node), kps_redo$count_children),
+         Rationale_child=replace (Rationale_child, which(Children %in% kps_redo$Node), kps_redo$Rationale_child),
+         Children=replace (Children, which(Children %in% kps_redo$Node), kps_redo$Children),
+         Label = paste0(Units_child,"->", Units_parent)) %>%
+  filter(!grepl("->kps", Label))
+
+obs_redo_EOA<- kps_redo_EOA %>%
+  full_join(ObsCap_redo, by = c("Node"="Children")) %>%
+  mutate(Definition_parent.x = ifelse(!is.na(Definition_parent.y), Definition_parent.y, Definition_parent.x),
+         Units_parent.x = ifelse(!is.na(Definition_parent.y), Units_parent.y, Units_parent.x),
+         Node =ifelse(!is.na(Definition_parent.y), Node.y, Node),
+         Rationale_parent.x = ifelse(!is.na(Definition_parent.y), Rationale_parent.y, Rationale_parent.x),
+         count_children = ifelse(!is.na(Definition_parent.y), count_children.x*count_children.y, count_children.x),
+         Label = paste0(Units_child.x,"->", Units_parent.x)) %>%
+  filter(!grepl("ObsCap->", Label)) %>%
+  select(-Label.x, -Label.y, -count_children.x, -count_children.y, -Definition_parent.y, -Units_parent.y, -Rationale_parent.y, -Node.y, -Definition_child.y, -Rationale_child.y, -Units_child.y) %>%
+  dplyr::rename(Definition_parent = Definition_parent.x,
+         Units_parent = Units_parent.x,
+         Rationale_parent = Rationale_parent.x,
+         Definition_child = Definition_child.x,
+         Units_child = Units_child.x,
+         Rationale_child = Rationale_child.x)
+
+
+PrdCap_redo_EOA<- obs_redo_EOA %>%
+  full_join(PrdCap_redo, by = c("Node"="Children")) %>%
+  mutate(Definition_parent.x = ifelse(!is.na(Definition_parent.y), Definition_parent.y, Definition_parent.x),
+         Units_parent.x = ifelse(!is.na(Definition_parent.y), Units_parent.y, Units_parent.x),
+         Node =ifelse(!is.na(Definition_parent.y), Node.y, Node),
+         Rationale_parent.x = ifelse(!is.na(Definition_parent.y), Rationale_parent.y, Rationale_parent.x),
+         count_children = ifelse(!is.na(Definition_parent.y), count_children.x*count_children.y, count_children.x),
+         Label = paste0(Units_child.x,"->", Units_parent.x)) %>%
+  filter(!grepl("PrdCap->", Label)) %>%
+  select(-Label.x, -Label.y, -count_children.x, -count_children.y, -Definition_parent.y, -Units_parent.y, -Rationale_parent.y, -Node.y, -Definition_child.y, -Rationale_child.y, -Units_child.y) %>%
+  dplyr::rename(Definition_parent = Definition_parent.x,
+         Units_parent = Units_parent.x,
+         Rationale_parent = Rationale_parent.x,
+         Definition_child = Definition_child.x,
+         Units_child = Units_child.x,
+         Rationale_child = Rationale_child.x)
+```
+
+
+```{r}
+# NOSIA_TRE_single_nodes<- NOSIA_TRE_Node %>%
+#  filter(!Node %in% NOSIA_TRE_join$Node)
+
+EOA_Edge <- EOA_TRE_join %>%
+  rename(Target = Definition_parent,
+         Source = Definition_child) %>%
+  select(Source, Target, Label) %>% 
+  write.csv("/Users/elizabethgugliotti/Desktop/EORES v1.6 Files (PROD-NOSIA-II)/Output/EOA_Edge_File.csv", row.names = FALSE)
+
+EOA_Node <- EOA_TRE %>%
+  rename(Id = Definition,
+         Label = Units) %>%
+  select(Id, Label) %>% 
+  write.csv("/Users/elizabethgugliotti/Desktop/EORES v1.6 Files (PROD-NOSIA-II)/Output/EOA_Node_File.csv", row.names = FALSE)
+```
+
+
+```{r}
+EOA_Edge_File<-read.csv("/Users/elizabethgugliotti/Desktop/Sankey/EOA_Edge_File.csv", header = TRUE)
+EOA_Edge_File<- EOA_Edge_File %>%
+  mutate(all = paste0(Source,"_",Target,"_",Label))
+
+EOA_Edge_TRE<- EOA_Edge %>%
+  mutate(all = paste0(Source,"_",Target,"_",Label))
+
+EOA_diff<-EOA_Edge_TRE %>%
+  filter(!all %in% EOA_Edge_File$all)
+```

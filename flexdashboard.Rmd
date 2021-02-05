@@ -1,0 +1,115 @@
+---
+title: "Systems Report"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+library(googledrive)
+library(knitr)
+library(reactable)
+library(ggplot2)
+library(gridExtra)
+library(flexdashboard)
+library(plotly)
+
+source('/Users/elizabethgugliotti/Desktop/EORES v1.6 Files (PROD-NOSIA-II)/Scripts/ImportFiles_CreateJoins.R')
+
+sensors_unique <- EOS %>%
+  dplyr::filter(osc_baseline_observing_system_category=="Critical") %>%
+  dplyr::select(system_name, system_acronym, system_type, sensing_element_name, sensing_element_acronym, sensing_element_type, gcmd_variable) %>%
+  dplyr::group_by(system_acronym, sensing_element_name) %>%
+  dplyr::summarise(number_GCMD_paths = n_distinct(gcmd_variable))
+```
+
+Column {data-width=450}
+-----------------------------------------------------------------------
+### Unique GCMD paths for sensors by system
+
+```{r}
+library(kableExtra)
+knitr::kable(sensors_unique,
+             col.names = c("System Acronym",
+                           "Sensing Element Name",
+                           "Number of GCMD Variables"))
+```
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Systems by LO
+
+```{r}
+Systems<-read.csv(myfiles[29]) 
+system2poh<- Systems %>%
+  select(-system_deployment_plans, -system_description, -country_names, -palma_id) %>%
+  full_join(POHtoSystem[POHtoSystem$poh_affiliation_type=="OBSERVING SYSTEM OWNER",], by = "system_id") %>%
+  filter(!is.na(system_name)) %>%
+  select(-level_5_name, -level_5_short_name, -level_6_name, -level_6_short_name, -level_7_name, -level_7_short_name, -level_8_name, -level_8_short_name, -poh_affiliation_type, -system_id, -observing_system_poh_id, -poh_master_id) %>%
+  filter(level_3_short_name == "NOAA"| system_acronym == "NERRS SWMP") %>%
+  filter(osc_baseline_observing_system_category == "Critical") %>%
+  select(-system_intended_use) %>%
+  mutate(level_4_short_name=replace(level_4_short_name, which(system_acronym == "NERRS SWMP"), "NOS")) %>%
+  dplyr::group_by(level_4_short_name) %>%
+  distinct(system_name,.keep_all = TRUE) %>%
+  as.data.frame() %>%
+  rename(LO = level_4_short_name)
+
+p<-ggplot(system2poh, aes(LO)) +
+  geom_bar() +
+  labs(y = "Number of Critical Observing Systems", x = "Line Office (LO)") +
+  theme(axis.title = element_text(size = (10)))
+ggplotly(p)
+```
+
+### IOOS Impact
+
+```{r}
+ioos<- read.csv("/Users/elizabethgugliotti/Desktop/EORES v1.6 Files (PROD-NOSIA-II)/Input/IOOS_ComputeDelta.csv", header = FALSE)
+rownames(ioos)<-ioos$V1
+library(data.table)
+library(highcharter)
+library(tidyverse)
+library(treemap)
+
+
+ioos_transpose<-transpose(ioos[,-1])
+colnames(ioos_transpose)<- rownames(ioos)
+ioos_long<-gather(ioos_transpose, system, impact_score, 5:8)
+ioos_long_new<-ioos_long %>%
+  rename(no_drop_score = `No Drop Score`,
+         level_name = `Level Name`) %>%
+  mutate(group = "NOSIA-2-1",
+         no_drop_score = as.numeric(no_drop_score),
+         impact_score = as.numeric(impact_score),
+         percent_impact = (impact_score/no_drop_score)*100) %>%
+  separate(level_name, c("subgroup", "MSA"),  remove = FALSE, sep = "_")
+
+
+ioos_combo<- ioos_long_new %>%
+  filter(system  =="IOOS Combined",
+         Level == "MSA") %>%
+  as.data.frame()
+color_custom<- c("#003F5C","#BC5090","#FF6361","FFA600")
+
+p<-treemap(ioos_combo, index=c("subgroup","MSA"),
+        vSize="percent_impact",
+        type = "index",
+        title = "Percent Impact of IOOS Combined on MSA",
+        bg.label = c("transparent"),
+        fontface.labels=c(2,2),
+        fontsize.labels = c(12,8),
+        lowerbound.cex.labels = .6,
+        align.label = list(
+          c("left","top"),
+          c("center","center")),
+        palette = "Dark2",
+        draw = FALSE)
+
+hctreemap(p,
+         allowDrillToNode = TRUE,
+         level = list(levelIsConstant = "false"))
+
+```

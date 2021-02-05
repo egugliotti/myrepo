@@ -1,0 +1,118 @@
+---
+title: "CRM Requests"
+output: html_notebook
+---
+
+#  Install Packages and Files
+These files can be found on the Google Drive under the Neo4j prototype or generated using the Ed's Neo4j python code
+```{r}
+# install.packages("plyr")
+# install.packages("readr")
+# install.packages("dplyr")
+# install.packages("networkD3")
+library(plyr)
+library(readr)
+library(dplyr)
+library(tidyverse)
+library(sjmisc)
+library(stringr)
+
+myfiles = list.files(path="C:/Users/Elizabeth.Gugliotti/Desktop/EORES v1.6 Files (PROD-NOSIA-II)", pattern="*.csv", full.names=TRUE)
+
+ElementsMeasureParameters<-read.csv(myfiles[2])
+GroupstoSource<-read.csv(myfiles[3])
+IsContributingMember<-read.csv(myfiles[4])
+IsContributingMember<- IsContributingMember[-1,]
+IsContributingMember$surveyed_product_elicitation_id<-as.integer(IsContributingMember$surveyed_product_elicitation_id)
+IsDirectContributer<-read.csv(myfiles[5])
+NetworkConsistsOfSystem<-read.csv(myfiles[6])
+PlatformHasSensingElements<-read.csv(myfiles[7])
+POCtoProd<-read.csv(myfiles[8])               
+POCtoReq<-read.csv(myfiles[9])               
+POCtoSystem<-read.csv(myfiles[10])               
+POCtoVT<-read.csv(myfiles[11])                  
+POHtoReq<-read.csv(myfiles[12])                  
+POHtoSystem<-read.csv(myfiles[13])              
+ProductToTree<-read.csv(myfiles[14])             
+ReqtoVT<-read.csv(myfiles[15])                   
+SystemHasPlatform<-read.csv(myfiles[16])         
+DataSource<-read.csv(myfiles[17])                
+Elements<-read.csv(myfiles[18])                  
+Networks<-read.csv(myfiles[19])  
+ObservingSystemCostInformation<-read.csv(myfiles[20])
+Parameters<-read.csv(myfiles[21])                
+Person<-read.csv(myfiles[22])                    
+Platforms<-read.csv(myfiles[23])                 
+POH<-read.csv(myfiles[24])                       
+Requirements<-read.csv(myfiles[26])              
+SourceGroups<-read.csv(myfiles[27])  
+Systems<-read.csv(myfiles[28])                   
+VTraw<-read.csv(myfiles[36])
+VT_SrvProduct<-read.csv(myfiles[35])
+```
+
+```{r}
+EOS<- Networks %>%
+  full_join(NetworkConsistsOfSystem, by="network_id") %>%
+  full_join(Systems, by="system_id") %>%
+  full_join(SystemHasPlatform, by="system_id") %>%
+  full_join(Platforms, by="platform_id") %>%
+  full_join(PlatformHasSensingElements, by="platform_id") %>%
+  full_join(Elements, by="sensing_element_id") %>%
+  full_join(ElementsMeasureParameters, by="sensing_element_id") %>%
+  full_join(Parameters, by="environmental_parameter_id")%>%
+  unite(palma_id, c(palma_id.x ,palma_id.y, palma_id.x.x, palma_id.y.y), sep="") %>% select(-country_names.x, -country_names.y) %>% na_if("") %>%
+  select(-network_description, -network_deployment_plans, -network_system_id, -system_description,-system_deployment_plans, -system_platform_id, -platform_description,-platform_deployment_plans, -orbit_type, -orbit_altitude_km, -orbit_inclination_deg, -orbit_period_min, -sun_side_equatorial_crossing_mode, -orbit_crossing_time, -nadir_repeat, -nadir_repeat_units, -satellite_longitude_deg, -orbit_eccentricity, -perigee_altitude_km, -apogee_altitude_km, -platform_sensing_element_id, -sensing_element_description, -sensing_element_deployment_plans, -swath_km, -revisit, -revisit_units, -acquisition_mode, -data_cost, -data_policy, -data_latency, -data_latency_units, -country_names, -sensing_element_environmental_parameter_id, -gcmd_variable_l2, -gcmd_variable_l3, -ods_flt_hrs_hods, -ods_flt_hrs_hods_units, -radar_bands)
+
+# Make a "slimmer" version of requirements data with less needed information excluded like comments columns
+Req_slim<-Requirements %>%
+  select(1:2,4:7,13:15,28:29,31:32,40:42,45:47,60:62,65:67,80:82,85:87,100:102,105:107)
+
+# Connect Requirements to EOS
+ReqToEOS<- Req_slim %>%
+  select(-geographic_coverage_threshold_weight, -geographic_coverage_objective_weight, -horizontal_resolution_objective_weight, -horizontal_resolution_threshold_weight, -vertical_resolution_objective_weight, -vertical_resolution_threshold_weight, - measurement_accuracy_threshold_weight, -measurement_accuracy_objective_weight, -sampling_interval_threshold_weight, -sampling_interval_objective_weight) %>%
+  full_join(EOS, by = c("primary_gcmd_variable" = "gcmd_variable")) %>%
+  select(-network_id, -system_id, -platform_id, -sensing_element_id, -sensing_capabilities_remarks, -environmental_parameter_id, -rating)
+```
+
+## Aaron CRM request
+```{r}
+aaron_tsu<- Req_VT %>%
+  filter(value_tree_level_3=="WRN_TSU") %>%
+  select(125, 1:2,3:120) %>%
+  distinct(requirement_name, .keep_all = TRUE)
+View(aaron_tsu)
+write.csv(aaron_tsu, "~/Desktop/aaron_tsu.csv")
+```
+
+## Zoraida Space Weather Assistance
+```{r}
+zor_crm <- read.csv("C:/Users/Elizabeth.Gugliotti/Desktop/CRM 2390.csv")
+zor_crm_reqs <- zor_crm %>%
+  rename(requirement_name = Requirements.for..NWS...WRN_SWX..Space.Weather.MSA.) %>%
+  inner_join(Requirements, by = "requirement_name")
+View(zor_crm_reqs)
+
+zor_crm_gcmd <- zor_crm %>%
+  rename(primary_gcmd_variable= Requirements.for..NWS...WRN_SWX..Space.Weather.MSA.) %>%
+  left_join(Requirements, by = "primary_gcmd_variable", keep = TRUE) %>%
+  filter(requirement_status == "ACTIVE",
+        !grepl("wmo", requirement_name)) %>%
+  select(1:15, 28:119) %>%
+  inner_join(ReqtoVT, by = "requirement_id", keep= FALSE) %>%
+  filter(value_tree_level_3 == "WRN_SWX")
+write.csv(zor_crm_gcmd, "C:/Users/Elizabeth.Gugliotti/Desktop/zor_crm.csv")
+
+View(zor_crm_gcmd)
+
+zor_crm$gcmd_match <- zor_crm$Requirements.for..NWS...WRN_SWX..Space.Weather.MSA. %in% zor_crm_gcmd$primary_gcmd_variable
+zor_crm$req_match <- zor_crm$Requirements.for..NWS...WRN_SWX..Space.Weather.MSA. %in% zor_crm_reqs$requirement_name
+
+
+Requirements %>%   
+  inner_join(ReqtoVT, by = "requirement_id", keep= FALSE) %>%
+  filter(value_tree_level_3 == "WRN_SWX") %>%
+  View()
+```
+
+

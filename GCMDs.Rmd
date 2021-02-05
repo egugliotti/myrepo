@@ -1,0 +1,26 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+. 
+
+```{r}
+source('C:/Users/Elizabeth.Gugliotti/Desktop/EORES v1.6 Files (PROD-NOSIA-II)/Scripts/ImportFiles_CreateJoins.R')
+GCMD<-read.csv("C:/Users/Elizabeth.Gugliotti/Desktop/EORES v1.6 Files (PROD-NOSIA-II)/Input/NOAA+NASA+USGS GCMD_ Pathways_07-14-2020.csv", header = TRUE)
+```
+
+```{r}
+EOS_gcmd<-EOS %>% unite ("gcmd_path", c("gcmd_term","gcmd_variable"), sep = " ", remove = FALSE)
+
+Req_slim_gcmd<- Req_slim %>% unite("gcmd_path", c("primary_gcmd_term", "primary_gcmd_variable"), sep = " ", remove = FALSE)
+
+GCMD<- GCMD %>% unite ("gcmd_path", c("NOAA.term", "NOAA.l1_variable"), sep = " ",  remove = FALSE)
+
+
+GCMD$in_EOR<- GCMD$gcmd_path %in% Req_slim_gcmd$gcmd_path
+GCMD$in_EOS<- GCMD$gcmd_path %in% EOS_gcmd$gcmd_path
+
+GCMD %>% filter (in_EOR == FALSE & in_EOS == FALSE) %>% View()
+```
+
+

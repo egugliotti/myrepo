@@ -1,0 +1,25 @@
+# This is a function to use a list created and search through the aspen data frame for instances of those search words
+# Function parameters: x = the list (make list by doing var<- c("word1","word2"...)), dat = data frame you are searching in, y = dataframe$var2search)
+# Example: to_search<- c("modis", "goes")
+#          list.search(to_search, ASPEN_sensor_gcmd, ASPEN_sensor_gcmd$sensing_element_name)
+
+
+list.search <- function(x, dat, y){
+  df<- data.frame (searched = character(),
+                   sensing_element_name = character(),
+                   sensing_element_acronym = character,
+                   sensing_element_type = character (),
+                   aspen_variable = character(),
+                   id = numeric())
+  for (i in x){
+    data <- dplyr::filter(dat, grepl(i, y, ignore.case = TRUE))
+    
+    d <- data.frame(searched = i,
+                    sensing_element_name = data$sensing_element_name,
+                    sensing_element_acronym = data$sensing_element_acronym,
+                    sensing_element_type = data$sensing_element_type ,
+                    aspen_variable = data$gcmd_variable,
+                    id = data$id)
+  }
+  rbind(df,d)
+}
